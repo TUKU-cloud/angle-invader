@@ -29,12 +29,15 @@
     let enemies = [];
     let score = 0;
     let firingAngle = 0;
+    let currentArc = 0;
+    let arcTarget = 0;
     let showAngleArc = false;
+    let isPreparingFire = false;
 
     function drawPointer(angle) {
       ctx.save();
       ctx.translate(center.x, center.y);
-      ctx.rotate(-angle * Math.PI / 180);
+      ctx.rotate((angle - 90) * Math.PI / 180); // 0°右 → 90°上
       ctx.strokeStyle = "cyan";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -49,7 +52,7 @@
       ctx.beginPath();
       ctx.moveTo(center.x, center.y);
       ctx.fillStyle = "yellow";
-      ctx.arc(center.x, center.y, 50, 0, -angle * Math.PI / 180, true);
+      ctx.arc(center.x, center.y, 50, -Math.PI / 2, (angle - 90) * Math.PI / 180, false);
       ctx.closePath();
       ctx.fill();
     }
@@ -57,21 +60,20 @@
     function prepareFire() {
       const angle = parseFloat(document.getElementById("angleInput").value);
       firingAngle = angle;
+      arcTarget = angle;
+      currentArc = 0;
       showAngleArc = true;
+      isPreparingFire = true;
       document.getElementById("angleDisplay").textContent = `入力角度：${angle}°`;
-      setTimeout(() => {
-        fire(angle);
-        showAngleArc = false;
-      }, 1000); // 1秒待機してから発射
     }
 
     function fire(angle) {
-      const rad = -angle * Math.PI / 180;
+      const rad = (angle - 90) * Math.PI / 180;
       bullets.push({
         x: center.x,
         y: center.y,
-        dx: Math.sin(rad) * 5,
-        dy: Math.cos(rad) * 5
+        dx: Math.cos(rad) * 5,
+        dy: Math.sin(rad) * 5
       });
     }
 
@@ -80,40 +82,65 @@
       const radius = 300;
       const x = center.x + radius * Math.cos(angle);
       const y = center.y + radius * Math.sin(angle);
-      const dx = (center.x - x) / 100;
-      const dy = (center.y - y) / 100;
+      const dx = (center.x - x) / 1000;
+      const dy = (center.y - y) / 1000;
       enemies.push({ x, y, dx, dy });
+    }
+
+    function drawBacteria(x, y) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = "lime";
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = i * Math.PI / 3;
+        const r = 14 + 4 * Math.sin(3 * angle);
+        const px = r * Math.cos(angle);
+        const py = r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
 
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawAngleArc(firingAngle);
-      drawPointer(firingAngle);
 
-      // update and draw bullets
+      if (isPreparingFire && currentArc < arcTarget) {
+        currentArc += 2;
+        if (currentArc >= arcTarget) {
+          currentArc = arcTarget;
+          setTimeout(() => {
+            fire(firingAngle);
+            showAngleArc = false;
+            isPreparingFire = false;
+          }, 1000);
+        }
+      }
+
+      drawAngleArc(currentArc);
+      drawPointer(currentArc);
+
       bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
       bullets.forEach(b => {
         b.x += b.dx;
-        b.y += -b.dy;
-        ctx.fillStyle = "lime";
+        b.y += b.dy;
+        ctx.fillStyle = "aqua";
         ctx.beginPath();
         ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
         ctx.fill();
       });
 
-      // update and draw enemies
       enemies.forEach((e, ei) => {
         e.x += e.dx;
         e.y += e.dy;
-        ctx.fillStyle = "red";
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, 12, 0, Math.PI * 2);
-        ctx.fill();
+        drawBacteria(e.x, e.y);
 
-        // 衝突判定
         bullets.forEach((b, bi) => {
           const dist = Math.hypot(b.x - e.x, b.y - e.y);
-          if (dist < 12) {
+          if (dist < 14) {
             enemies.splice(ei, 1);
             bullets.splice(bi, 1);
             score++;
@@ -125,7 +152,6 @@
       requestAnimationFrame(update);
     }
 
-    // 初期敵出現と定期出現
     spawnEnemy();
     setInterval(spawnEnemy, 3000);
 
