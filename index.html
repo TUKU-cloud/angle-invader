@@ -4,32 +4,32 @@
   <meta charset="UTF-8">
   <title>角度インベーダーゲーム</title>
   <style>
-    canvas {
-      background: #000;
-      display: block;
-      margin: 0 auto;
-    }
-    #controls {
-      text-align: center;
-      margin: 10px;
-    }
-    input[type="number"] {
-      width: 60px;
-    }
+    body { background: #000; color: white; font-family: sans-serif; text-align: center; }
+    canvas { background: #111; display: block; margin: 10px auto; }
+    #controls { margin: 10px; }
+    input[type="number"] { width: 60px; }
+    #angleDisplay { margin-top: 5px; font-size: 18px; color: gold; }
   </style>
 </head>
 <body>
+  <h1>角度インベーダー</h1>
   <div id="controls">
     <label>角度 (0〜360): <input type="number" id="angleInput" min="0" max="360" value="0"></label>
-    <button onclick="fire()">発射！</button>
+    <button onclick="prepareFire()">発射！</button>
+    <div>スコア: <span id="score">0</span></div>
+    <div id="angleDisplay"></div>
   </div>
-  <canvas id="gameCanvas" width="600" height="400"></canvas>
+  <canvas id="gameCanvas" width="600" height="600"></canvas>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    const center = { x: canvas.width / 2, y: canvas.height - 30 };
+    const center = { x: canvas.width / 2, y: canvas.height / 2 };
     let bullets = [];
+    let enemies = [];
+    let score = 0;
+    let firingAngle = 0;
+    let showAngleArc = false;
 
     function drawPointer(angle) {
       ctx.save();
@@ -44,8 +44,28 @@
       ctx.restore();
     }
 
-    function fire() {
+    function drawAngleArc(angle) {
+      if (!showAngleArc) return;
+      ctx.beginPath();
+      ctx.moveTo(center.x, center.y);
+      ctx.fillStyle = "yellow";
+      ctx.arc(center.x, center.y, 50, 0, -angle * Math.PI / 180, true);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function prepareFire() {
       const angle = parseFloat(document.getElementById("angleInput").value);
+      firingAngle = angle;
+      showAngleArc = true;
+      document.getElementById("angleDisplay").textContent = `入力角度：${angle}°`;
+      setTimeout(() => {
+        fire(angle);
+        showAngleArc = false;
+      }, 1000); // 1秒待機してから発射
+    }
+
+    function fire(angle) {
       const rad = -angle * Math.PI / 180;
       bullets.push({
         x: center.x,
@@ -55,26 +75,59 @@
       });
     }
 
+    function spawnEnemy() {
+      const angle = Math.random() * 2 * Math.PI;
+      const radius = 300;
+      const x = center.x + radius * Math.cos(angle);
+      const y = center.y + radius * Math.sin(angle);
+      const dx = (center.x - x) / 100;
+      const dy = (center.y - y) / 100;
+      enemies.push({ x, y, dx, dy });
+    }
+
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const angle = parseFloat(document.getElementById("angleInput").value);
-      drawPointer(angle);
+      drawAngleArc(firingAngle);
+      drawPointer(firingAngle);
 
-      bullets.forEach((b, i) => {
+      // update and draw bullets
+      bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
+      bullets.forEach(b => {
         b.x += b.dx;
         b.y += -b.dy;
         ctx.fillStyle = "lime";
         ctx.beginPath();
         ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
         ctx.fill();
+      });
 
-        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
-          bullets.splice(i, 1);
-        }
+      // update and draw enemies
+      enemies.forEach((e, ei) => {
+        e.x += e.dx;
+        e.y += e.dy;
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 衝突判定
+        bullets.forEach((b, bi) => {
+          const dist = Math.hypot(b.x - e.x, b.y - e.y);
+          if (dist < 12) {
+            enemies.splice(ei, 1);
+            bullets.splice(bi, 1);
+            score++;
+            document.getElementById("score").textContent = score;
+          }
+        });
       });
 
       requestAnimationFrame(update);
     }
+
+    // 初期敵出現と定期出現
+    spawnEnemy();
+    setInterval(spawnEnemy, 3000);
 
     update();
   </script>
