@@ -120,14 +120,16 @@
         x = Math.random() * canvas.width;
         y = Math.random() * canvas.height;
       } while (Math.hypot(x - center.x, y - center.y) < 200);
-      enemies.push({ x, y, size: 30, lastMoveTime: Date.now() });
+      const baseSize = 30;
+      const scale = 1 + Math.random() * 2;
+      enemies.push({ x, y, size: baseSize * scale, lastMoveTime: Date.now() });
       if (Math.random() < 0.1) spawnItem();
     }
 
     function spawnItem() {
       let x = Math.random() * canvas.width;
       let y = Math.random() * canvas.height;
-      items.push({ x, y, size: 30 });
+      items.push({ x, y, size: 45 });
     }
 
     function drawExplosions() {
@@ -138,7 +140,8 @@
           return;
         }
         const image = explosionImages[Math.floor(Math.random() * explosionImages.length)];
-        ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - 32, explosion.y - 32, 64, 64);
+        const size = explosion.size || 64;
+        ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - size / 2, explosion.y - size / 2, size, size);
         explosion.frame++;
       });
     }
@@ -191,7 +194,7 @@
 
           bullets.forEach((b, bi) => {
             if (Math.abs(b.x - enemy.x) < enemy.size / 2 && Math.abs(b.y - enemy.y) < enemy.size / 2) {
-              explosions.push({ x: enemy.x, y: enemy.y, frame: 0 });
+              explosions.push({ x: enemy.x, y: enemy.y, frame: 0, size: enemy.size });
               bullets.splice(bi, 1);
               enemies.splice(idx, 1);
               score++;
