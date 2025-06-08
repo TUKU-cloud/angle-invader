@@ -37,25 +37,27 @@
     function drawPointer(angle) {
   ctx.save();
   ctx.translate(center.x, center.y);
-  ctx.rotate((angle) * Math.PI / 180); // 0°右 → 90°上
-  ctx.fillStyle = "cyan";
+  ctx.rotate(angle * Math.PI / 180); // 0°右 → 90°上
+  ctx.fillStyle = "darkcyan";
   ctx.beginPath();
-  ctx.moveTo(0, -20);
-  ctx.lineTo(-10, 10);
-  ctx.lineTo(10, 10);
+  ctx.moveTo(0, -25); // 砲口
+  ctx.lineTo(-15, 15); // 左脚
+  ctx.lineTo(15, 15);  // 右脚
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+}
     }
 
     function drawAngleArc(angle) {
-      if (!showAngleArc) return;
-      ctx.beginPath();
-      ctx.moveTo(center.x, center.y);
-      ctx.fillStyle = "yellow";
-      ctx.arc(center.x, center.y, 50, 0, angle * Math.PI / 180, false);
-      ctx.closePath();
-      ctx.fill();
+  if (!showAngleArc) return;
+  ctx.beginPath();
+  ctx.moveTo(center.x, center.y);
+  ctx.fillStyle = "yellow";
+  ctx.arc(center.x, center.y, 50, 0, angle * Math.PI / 180, false);
+  ctx.closePath();
+  ctx.fill();
+}
     }
 
     function prepareFire() {
