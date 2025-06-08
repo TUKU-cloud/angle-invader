@@ -4,159 +4,245 @@
   <meta charset="UTF-8">
   <title>角度インベーダーゲーム</title>
   <style>
-    body { background: #000; color: white; font-family: sans-serif; text-align: center; }
-    canvas { background: #111; display: block; margin: 10px auto; }
-    #controls { margin: 10px; }
+    body {
+      background: url('https://petit-sozai.com/wp-content/uploads/2023/10/starry-sky@640.jpg') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    canvas {
+      background: rgba(0, 0, 0, 0.6);
+      display: block;
+      margin: 10px auto;
+    }
+    #controls, #scoreDisplay { margin: 10px; }
     input[type="number"] { width: 60px; }
-    #angleDisplay { margin-top: 5px; font-size: 18px; color: gold; }
+    #scoreDisplay { font-size: 20px; color: lime; }
+    #gameContainer { position: relative; width: 800px; margin: auto; }
+    #angleInputBox {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: #222;
+      padding: 5px;
+      border-radius: 5px;
+      opacity: 0.8;
+    }
+    .numpad-button {
+      font-size: 12px;
+      width: 40px;
+      height: 40px;
+      margin: 2px;
+    }
   </style>
 </head>
 <body>
   <h1>角度インベーダー</h1>
   <div id="controls">
-    <label>角度 (0〜360): <input type="number" id="angleInput" min="0" max="360" value="0"></label>
-    <button onclick="prepareFire()">発射！</button>
-    <div>スコア: <span id="score">0</span></div>
-    <div id="angleDisplay"></div>
+    <button onclick="startGame()">スタート</button>
+    <div id="scoreDisplay">スコア: 0</div>
   </div>
-  <canvas id="gameCanvas" width="600" height="600"></canvas>
-
+  <div id="gameContainer">
+    <div id="angleInputBox">
+      <label style="font-size:12px;">角度: <input type="number" id="angleInput" min="0" max="360" value="0"></label>
+      <button onclick="prepareFire()" style="font-size:12px;">発射</button>
+      <div id="numpad"></div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+  </div>
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     const center = { x: canvas.width / 2, y: canvas.height / 2 };
-    let bullets = [];
-    let enemies = [];
-    let score = 0;
+
+    let bullets = [], enemies = [];
     let firingAngle = 0;
-    let currentArc = 0;
-    let arcTarget = 0;
-    let showAngleArc = false;
-    let isPreparingFire = false;
+    let score = 0;
+    let lastFireTime = 0;
+    let gameRunning = false, gameOver = false;
+    let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
+    let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
 
-    function drawPointer(angle) {
-  ctx.save();
-  ctx.translate(center.x, center.y);
-  ctx.rotate(angle * Math.PI / 180); // 0°右 → 90°上
-  ctx.fillStyle = "darkcyan";
-  ctx.beginPath();
-  ctx.moveTo(0, -25); // 砲口
-  ctx.lineTo(-15, 15); // 左脚
-  ctx.lineTo(15, 15);  // 右脚
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-    }
-
-    function drawAngleArc(angle) {
-  if (!showAngleArc) return;
-  ctx.beginPath();
-  ctx.moveTo(center.x, center.y);
-  ctx.fillStyle = "yellow";
-  ctx.arc(center.x, center.y, 50, 0, angle * Math.PI / 180, false);
-  ctx.closePath();
-  ctx.fill();
-}
+    function startGame() {
+      bullets = [];
+      enemies = [];
+      score = 0;
+      gameRunning = true;
+      gameOver = false;
+      enemyMoveInterval = 5000;
+      lastEnemySpawnTime = Date.now();
+      document.getElementById("scoreDisplay").textContent = "スコア: 0";
+      spawnEnemy();
     }
 
     function prepareFire() {
-      const angle = parseFloat(document.getElementById("angleInput").value);
+      if (!gameRunning || Date.now() - lastFireTime < 3000) return;
+      const angle = parseFloat(document.getElementById("angleInput").value) % 360;
       firingAngle = angle;
       arcTarget = angle;
-      currentArc = 0;
-      showAngleArc = true;
       isPreparingFire = true;
-      document.getElementById("angleDisplay").textContent = `入力角度：${angle}°`;
+      keepArc = false;
+      returningToZero = false;
+      arcStartTime = Date.now();
+      lastFireTime = Date.now();
+      document.getElementById("angleInput").value = "";
     }
 
     function fire(angle) {
-      const rad = angle * Math.PI / 180;
+      const rad = -angle * Math.PI / 180;
       bullets.push({
         x: center.x,
         y: center.y,
         dx: Math.cos(rad) * 5,
         dy: Math.sin(rad) * 5
       });
+      keepArc = true;
+      arcShownTime = Date.now();
     }
 
     function spawnEnemy() {
-      const angle = Math.random() * 2 * Math.PI;
-      const radius = 300;
-      const x = center.x + radius * Math.cos(angle);
-      const y = center.y + radius * Math.sin(angle);
-      const dx = (center.x - x) / 1000;
-      const dy = (center.y - y) / 1000;
-      enemies.push({ x, y, dx, dy });
-    }
-
-    function drawBacteria(x, y) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = "blue";
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = i * Math.PI / 3;
-        const r = 14 + 4 * Math.sin(3 * angle);
-        const px = r * Math.cos(angle);
-        const py = r * Math.sin(angle);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
+      if (enemies.length >= 3) return;
+      let x, y;
+      do {
+        x = Math.random() * canvas.width;
+        y = Math.random() * canvas.height;
+      } while (Math.hypot(x - center.x, y - center.y) < 200);
+      enemies.push({ x, y, size: 30, lastMoveTime: Date.now() });
     }
 
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (isPreparingFire && currentArc < arcTarget) {
-        currentArc += 2;
-        if (currentArc >= arcTarget) {
-          currentArc = arcTarget;
-          setTimeout(() => {
+      if (gameRunning) {
+        // 弧の描画と発射処理
+        if (isPreparingFire) {
+          let progress = Math.min((Date.now() - arcStartTime) / 2000, 1);
+          currentArc = arcTarget * progress;
+          if (progress >= 1) {
             fire(firingAngle);
-            showAngleArc = false;
             isPreparingFire = false;
-          }, 1000);
+            returningToZero = true;
+          }
+        } else if (returningToZero && Date.now() - arcShownTime >= 2000) {
+          currentArc = 0;
+          keepArc = false;
+          returningToZero = false;
         }
-      }
+        if (isPreparingFire || keepArc || returningToZero) drawArc(0, currentArc);
+        drawPointer(currentArc);
 
-      drawAngleArc(currentArc);
-      drawPointer(currentArc);
+        // 弾の移動
+        bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
+        bullets.forEach(b => {
+          b.x += b.dx;
+          b.y += b.dy;
+          ctx.fillStyle = "aqua";
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 10, 0, Math.PI * 2);
+          ctx.fill();
+        });
 
-      bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
-      bullets.forEach(b => {
-        b.x += b.dx;
-        b.y += b.dy;
-        ctx.fillStyle = "aqua";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      });
+        // 敵のスポーン
+        let spawnInterval = Math.max(1000, baseEnemySpawnInterval - score * 500);
+        if (Date.now() - lastEnemySpawnTime >= spawnInterval) {
+          spawnEnemy();
+          lastEnemySpawnTime = Date.now();
+        }
 
-      enemies.forEach((e, ei) => {
-        e.x += e.dx;
-        e.y += e.dy;
-        drawBacteria(e.x, e.y);
+        // 敵の処理
+        enemies.forEach((enemy, idx) => {
+          if (Date.now() - enemy.lastMoveTime >= enemyMoveInterval) {
+            const angle = Math.atan2(center.y - enemy.y, center.x - enemy.x);
+            enemy.x += Math.cos(angle) * 10;
+            enemy.y += Math.sin(angle) * 10;
+            enemy.lastMoveTime = Date.now();
+          }
 
-        bullets.forEach((b, bi) => {
-          const dist = Math.hypot(b.x - e.x, b.y - e.y);
-          if (dist < 14) {
-            enemies.splice(ei, 1);
-            bullets.splice(bi, 1);
-            score++;
-            document.getElementById("score").textContent = score;
+          ctx.fillStyle = "red";
+          ctx.fillRect(enemy.x - enemy.size / 2, enemy.y - enemy.size / 2, enemy.size, enemy.size);
+
+          bullets.forEach((b, bi) => {
+            if (Math.abs(b.x - enemy.x) < enemy.size / 2 && Math.abs(b.y - enemy.y) < enemy.size / 2) {
+              bullets.splice(bi, 1);
+              enemies.splice(idx, 1);
+              score++;
+              document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
+              enemyMoveInterval = Math.max(500, enemyMoveInterval - 200);
+              spawnEnemy();
+            }
+          });
+
+          if (Math.abs(enemy.x - center.x) < 20 && Math.abs(enemy.y - center.y) < 20) {
+            gameRunning = false;
+            gameOver = true;
           }
         });
-      });
+      }
+
+      if (gameOver) {
+        ctx.fillStyle = "white";
+        ctx.font = "30px sans-serif";
+        ctx.fillText("ゲームオーバー", canvas.width / 2 - 100, canvas.height / 2);
+      }
 
       requestAnimationFrame(update);
     }
 
-    spawnEnemy();
-    setInterval(spawnEnemy, 3000);
+    function drawPointer(angle) {
+      ctx.save();
+      ctx.translate(center.x, center.y);
+      ctx.rotate(-angle * Math.PI / 180);
+      ctx.fillStyle = "darkcyan";
+      ctx.beginPath();
+      ctx.moveTo(20, 0);
+      ctx.lineTo(-10, -10);
+      ctx.lineTo(-5, 0);
+      ctx.lineTo(-10, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawArc(from, to) {
+      ctx.save();
+      ctx.translate(center.x, center.y);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.fillStyle = "#FFFF00";
+      ctx.arc(0, 0, 100, -from * Math.PI / 180, -to * Math.PI / 180, true);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "aqua";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(100 * Math.cos(-from * Math.PI / 180), 100 * Math.sin(-from * Math.PI / 180));
+      ctx.moveTo(0, 0);
+      ctx.lineTo(100 * Math.cos(-to * Math.PI / 180), 100 * Math.sin(-to * Math.PI / 180));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // テンキー生成
+    const numpad = document.getElementById("numpad");
+    const keys = [[1,2,3],[4,5,6],[7,8,9],["けす",0]];
+    keys.forEach(row => {
+      const rowDiv = document.createElement("div");
+      row.forEach(k => {
+        const btn = document.createElement("button");
+        btn.textContent = k;
+        btn.className = "numpad-button";
+        btn.onclick = () => {
+          const input = document.getElementById("angleInput");
+          if (k === "けす") input.value = "";
+          else input.value += k;
+        };
+        rowDiv.appendChild(btn);
+      });
+      numpad.appendChild(rowDiv);
+    });
 
     update();
   </script>
