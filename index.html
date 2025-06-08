@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>角度インベーダーゲーム</title>
+  <style>
+    canvas {
+      background: #000;
+      display: block;
+      margin: 0 auto;
+    }
+    #controls {
+      text-align: center;
+      margin: 10px;
+    }
+    input[type="number"] {
+      width: 60px;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label>角度 (0〜360): <input type="number" id="angleInput" min="0" max="360" value="0"></label>
+    <button onclick="fire()">発射！</button>
+  </div>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const center = { x: canvas.width / 2, y: canvas.height - 30 };
+    let bullets = [];
+
+    function drawPointer(angle) {
+      ctx.save();
+      ctx.translate(center.x, center.y);
+      ctx.rotate(-angle * Math.PI / 180);
+      ctx.strokeStyle = "cyan";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -40);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function fire() {
+      const angle = parseFloat(document.getElementById("angleInput").value);
+      const rad = -angle * Math.PI / 180;
+      bullets.push({
+        x: center.x,
+        y: center.y,
+        dx: Math.sin(rad) * 5,
+        dy: Math.cos(rad) * 5
+      });
+    }
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const angle = parseFloat(document.getElementById("angleInput").value);
+      drawPointer(angle);
+
+      bullets.forEach((b, i) => {
+        b.x += b.dx;
+        b.y += -b.dy;
+        ctx.fillStyle = "lime";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+          bullets.splice(i, 1);
+        }
+      });
+
+      requestAnimationFrame(update);
+    }
+
+    update();
+  </script>
+</body>
+</html>
