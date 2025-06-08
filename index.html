@@ -73,6 +73,9 @@
     let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
     let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
     let freezeUntil = 0;
+    let fireCooldown = 3000;
+    let baseArcTime = 2000;
+    let currentArcTime = baseArcTime;
 
     function startGame() {
       bullets = [];
@@ -80,6 +83,8 @@
       explosions = [];
       items = [];
       score = 0;
+      fireCooldown = 3000;
+      currentArcTime = baseArcTime;
       gameRunning = true;
       gameOver = false;
       enemyMoveInterval = 5000;
@@ -89,7 +94,7 @@
     }
 
     function prepareFire() {
-      if (!gameRunning || Date.now() - lastFireTime < 3000) return;
+      if (!gameRunning || Date.now() - lastFireTime < fireCooldown) return;
       const angle = parseFloat(document.getElementById("angleInput").value) % 360;
       firingAngle = angle;
       arcTarget = angle;
@@ -120,15 +125,15 @@
         x = Math.random() * canvas.width;
         y = Math.random() * canvas.height;
       } while (Math.hypot(x - center.x, y - center.y) < 200);
-      const size = 30 * (1 + Math.random() * 2); // 1倍〜3倍のサイズ
-      enemies.push({ x, y, size, lastMoveTime: Date.now() });
-      if (Math.random() < 0.2) spawnItem();
+      let size = 30 * (1 + Math.random() * 2);
+      enemies.push({ x, y, size: size, lastMoveTime: Date.now() });
+      if (Math.random() < 0.1) spawnItem();
     }
 
     function spawnItem() {
       let x = Math.random() * canvas.width;
       let y = Math.random() * canvas.height;
-      items.push({ x, y, size: 45 }); // サイズ1.5倍に
+      items.push({ x, y, size: 45 });
     }
 
     function drawExplosions() {
@@ -149,7 +154,7 @@
 
       if (gameRunning) {
         if (isPreparingFire) {
-          let progress = Math.min((Date.now() - arcStartTime) / 2000, 1);
+          let progress = Math.min((Date.now() - arcStartTime) / currentArcTime, 1);
           currentArc = arcTarget * progress;
           if (progress >= 1) {
             fire(firingAngle);
@@ -198,6 +203,10 @@
               score++;
               document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
               enemyMoveInterval = Math.max(500, enemyMoveInterval - 200);
+              if (score % 3 === 0) {
+                fireCooldown = Math.max(500, fireCooldown - 100);
+                currentArcTime = Math.max(500, currentArcTime - 100);
+              }
               spawnEnemy();
             }
           });
