@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>角度インベーダーゲーム</title>
+  <title>角度インベーダー v14</title>
   <style>
     body {
       background: url('https://petit-sozai.com/wp-content/uploads/2023/10/starry-sky@640.jpg') no-repeat center center fixed;
@@ -56,17 +56,22 @@
     const ctx = canvas.getContext("2d");
     const center = { x: canvas.width / 2, y: canvas.height / 2 };
 
-    let bullets = [], enemies = [];
-    let firingAngle = 0;
-    let score = 0;
-    let lastFireTime = 0;
+    let bullets = [], enemies = [], explosions = [];
+    let firingAngle = 0, score = 0, lastFireTime = 0;
     let gameRunning = false, gameOver = false;
-    let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
+    let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0;
+    let keepArc = false, arcShownTime = 0, returningToZero = false;
     let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
+
+    const explosionImages = [new Image(), new Image()];
+    explosionImages[0].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom1.png';
+    explosionImages[1].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom2.png';
+    const explosionFrameWidth = 64, explosionFrameHeight = 64, explosionFrameCount = 16;
 
     function startGame() {
       bullets = [];
       enemies = [];
+      explosions = [];
       score = 0;
       gameRunning = true;
       gameOver = false;
@@ -91,12 +96,7 @@
 
     function fire(angle) {
       const rad = -angle * Math.PI / 180;
-      bullets.push({
-        x: center.x,
-        y: center.y,
-        dx: Math.cos(rad) * 5,
-        dy: Math.sin(rad) * 5
-      });
+      bullets.push({ x: center.x, y: center.y, dx: Math.cos(rad) * 5, dy: Math.sin(rad) * 5 });
       keepArc = true;
       arcShownTime = Date.now();
     }
@@ -111,11 +111,25 @@
       enemies.push({ x, y, size: 30, lastMoveTime: Date.now() });
     }
 
+    function drawExplosions() {
+      explosions.forEach((explosion, index) => {
+        const frame = Math.floor(explosion.frame / 4);
+        if (frame >= explosionFrameCount) {
+          explosions.splice(index, 1);
+          return;
+        }
+        const image = explosionImages[Math.floor(Math.random() * explosionImages.length)];
+        const explosionX = explosion.x - (explosion.width / 2);
+        const explosionY = explosion.y - (explosion.height / 2);
+        ctx.drawImage(image, 0, 0, image.width, image.height, explosionX, explosionY, explosion.width, explosion.height);
+        explosion.frame++;
+      });
+    }
+
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (gameRunning) {
-        // 弧の描画と発射処理
         if (isPreparingFire) {
           let progress = Math.min((Date.now() - arcStartTime) / 2000, 1);
           currentArc = arcTarget * progress;
@@ -132,7 +146,6 @@
         if (isPreparingFire || keepArc || returningToZero) drawArc(0, currentArc);
         drawPointer(currentArc);
 
-        // 弾の移動
         bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
         bullets.forEach(b => {
           b.x += b.dx;
@@ -143,14 +156,12 @@
           ctx.fill();
         });
 
-        // 敵のスポーン
         let spawnInterval = Math.max(1000, baseEnemySpawnInterval - score * 500);
         if (Date.now() - lastEnemySpawnTime >= spawnInterval) {
           spawnEnemy();
           lastEnemySpawnTime = Date.now();
         }
 
-        // 敵の処理
         enemies.forEach((enemy, idx) => {
           if (Date.now() - enemy.lastMoveTime >= enemyMoveInterval) {
             const angle = Math.atan2(center.y - enemy.y, center.x - enemy.x);
@@ -164,6 +175,7 @@
 
           bullets.forEach((b, bi) => {
             if (Math.abs(b.x - enemy.x) < enemy.size / 2 && Math.abs(b.y - enemy.y) < enemy.size / 2) {
+              explosions.push({ x: enemy.x, y: enemy.y, width: 64, height: 64, frame: 0 });
               bullets.splice(bi, 1);
               enemies.splice(idx, 1);
               score++;
@@ -179,6 +191,8 @@
           }
         });
       }
+
+      drawExplosions();
 
       if (gameOver) {
         ctx.fillStyle = "white";
@@ -213,7 +227,6 @@
       ctx.arc(0, 0, 100, -from * Math.PI / 180, -to * Math.PI / 180, true);
       ctx.closePath();
       ctx.fill();
-
       ctx.strokeStyle = "aqua";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -225,7 +238,6 @@
       ctx.restore();
     }
 
-    // テンキー生成
     const numpad = document.getElementById("numpad");
     const keys = [[1,2,3],[4,5,6],[7,8,9],["けす",0]];
     keys.forEach(row => {
