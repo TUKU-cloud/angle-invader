@@ -120,16 +120,15 @@
         x = Math.random() * canvas.width;
         y = Math.random() * canvas.height;
       } while (Math.hypot(x - center.x, y - center.y) < 200);
-      const baseSize = 30;
-      const scale = 1 + Math.random() * 2;
-      enemies.push({ x, y, size: baseSize * scale, lastMoveTime: Date.now() });
-      if (Math.random() < 0.1) spawnItem();
+      const size = 30 * (1 + Math.random() * 2); // 1倍〜3倍のサイズ
+      enemies.push({ x, y, size, lastMoveTime: Date.now() });
+      if (Math.random() < 0.2) spawnItem();
     }
 
     function spawnItem() {
       let x = Math.random() * canvas.width;
       let y = Math.random() * canvas.height;
-      items.push({ x, y, size: 45 });
+      items.push({ x, y, size: 45 }); // サイズ1.5倍に
     }
 
     function drawExplosions() {
@@ -140,8 +139,7 @@
           return;
         }
         const image = explosionImages[Math.floor(Math.random() * explosionImages.length)];
-        const size = explosion.size || 64;
-        ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - size / 2, explosion.y - size / 2, size, size);
+        ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - explosion.size / 2, explosion.y - explosion.size / 2, explosion.size, explosion.size);
         explosion.frame++;
       });
     }
