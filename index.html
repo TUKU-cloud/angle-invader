@@ -1,7 +1,8 @@
-<!DOCTYPE html><html lang="ja">
+<!DOCTYPE html>
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>角度インベーダー v15</title>
+  <title>角度インベーダー v16</title>
   <style>
     body {
       background: url('https://petit-sozai.com/wp-content/uploads/2023/10/starry-sky@640.jpg') no-repeat center center fixed;
@@ -37,7 +38,7 @@
   </style>
 </head>
 <body>
-  <h1>角度インベーダー v15</h1>
+  <h1>角度インベーダー v16</h1>
   <div id="controls">
     <button onclick="startGame()">スタート</button>
     <div id="scoreDisplay">スコア: 0</div>
@@ -53,23 +54,68 @@
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    const center = { x: canvas.width / 2, y: canvas.height / 2 };const explosionImages = [new Image(), new Image()];
-explosionImages[0].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom1.png';
-explosionImages[1].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom2.png';
+    const center = { x: canvas.width / 2, y: canvas.height / 2 };
 
-const timerItemImage = new Image();
-timerItemImage.src = 'https://www.sozailab.jp/db_img/sozai/12297/0d52b6f43ae170a5515cf8ca7f274da5.png';
+    const timerItemImage = new Image();
+    timerItemImage.src = 'https://www.sozailab.jp/db_img/sozai/12297/0d52b6f43ae170a5515cf8ca7f274da5.png';
 
-const explosionFrameCount = 16;
-let bullets = [], enemies = [], explosions = [], items = [];
-let firingAngle = 0, score = 0, lastFireTime = 0;
-let gameRunning = false, gameOver = false;
-let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
-let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
-let freezeUntil = 0;
-let fireCooldown = 3000;
+    let bullets = [], enemies = [], explosions = [], items = [];
+    let firingAngle = 0, score = 0, lastFireTime = 0;
+    let gameRunning = false, gameOver = false;
+    let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
+    let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
+    let freezeUntil = 0;
+    let fireCooldown = 3000;
+    let drawArcDuration = 2000; // 弧の描画時間（ms）
+    let lastLevelUpScore = 0;   // レベルアップ重複防止
 
-function startGame() {
+
+    function drawCustomEnemy(x, y, size) {
+      ctx.save();
+      ctx.translate(x, y);
+      const s = size / 300; // スケーリングをやや拡大
+
+      ctx.fillStyle = "yellow";
+      ctx.beginPath();
+      ctx.moveTo(-60 * s, 0);
+      ctx.lineTo(-90 * s, 50 * s);
+      ctx.lineTo(-90 * s, -50 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(60 * s, 0);
+      ctx.lineTo(90 * s, 50 * s);
+      ctx.lineTo(90 * s, -50 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#c98d1b";
+      ctx.beginPath();
+      ctx.moveTo(-40 * s, -50 * s);
+      ctx.lineTo(40 * s, -50 * s);
+      ctx.lineTo(40 * s, 50 * s);
+      ctx.lineTo(-40 * s, 50 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "red";
+      ctx.beginPath();
+      ctx.arc(0, 0, 20 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "gray";
+      ctx.fillRect(-25 * s, 50 * s, 10 * s, 20 * s);
+      ctx.fillRect(15 * s, 50 * s, 10 * s, 20 * s);
+
+      ctx.restore();
+    }
+
+    function startGame() {
   bullets = [];
   enemies = [];
   explosions = [];
@@ -116,8 +162,10 @@ function spawnEnemy() {
     x = Math.random() * canvas.width;
     y = Math.random() * canvas.height;
   } while (Math.hypot(x - center.x, y - center.y) < 200);
-  let size = 30 * (1 + Math.random() * 2);
-  enemies.push({ x, y, size: size, lastMoveTime: Date.now() });
+  let scaleFactor = 1 + Math.floor(Math.random() * 10 + 1) / 10; // 1.1〜2.0 の範囲で0.1刻み
+let size = 80 * scaleFactor;
+enemies.push({ x, y, size: size, lastMoveTime: Date.now() });
+
   if (Math.random() < 0.1) spawnItem();
 }
 
@@ -129,15 +177,74 @@ function spawnItem() {
 
 function drawExplosions() {
   explosions.forEach((explosion, index) => {
-    const frame = Math.floor(explosion.frame / 4);
-    if (frame >= explosionFrameCount) {
+    const maxRadius = explosion.size;
+    const progress = explosion.frame / 20;
+    if (progress >= 1) {
       explosions.splice(index, 1);
       return;
     }
-    const image = explosionImages[Math.floor(Math.random() * explosionImages.length)];
-    ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - explosion.size / 2, explosion.y - explosion.size / 2, explosion.size, explosion.size);
+    const radius = maxRadius * progress;
+    const alpha = 1 - progress;
+
+    ctx.beginPath();
+    ctx.arc(explosion.x, explosion.y, radius / 4, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(explosion.x, explosion.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 50, 0, ${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    for (let i = 0; i < 5; i++) {
+      const angle = Math.random() * 2 * Math.PI;
+      const dist = radius * Math.random();
+      const px = explosion.x + Math.cos(angle) * dist;
+      const py = explosion.y + Math.sin(angle) * dist;
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 165, 0, ${alpha})`;
+      ctx.fill();
+    }
+
     explosion.frame++;
   });
+}
+
+function drawPointer(angle) {
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.rotate(-angle * Math.PI / 180);
+  ctx.fillStyle = "darkcyan";
+  ctx.beginPath();
+  ctx.moveTo(20, 0);
+  ctx.lineTo(-10, -10);
+  ctx.lineTo(-5, 0);
+  ctx.lineTo(-10, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawArc(from, to) {
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.fillStyle = "#FFFF00";
+  ctx.arc(0, 0, 100, -from * Math.PI / 180, -to * Math.PI / 180, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "aqua";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(100 * Math.cos(-from * Math.PI / 180), 100 * Math.sin(-from * Math.PI / 180));
+  ctx.moveTo(0, 0);
+  ctx.lineTo(100 * Math.cos(-to * Math.PI / 180), 100 * Math.sin(-to * Math.PI / 180));
+  ctx.stroke();
+  ctx.restore();
 }
 
 function update() {
@@ -145,7 +252,7 @@ function update() {
 
   if (gameRunning) {
     if (isPreparingFire) {
-      let progress = Math.min((Date.now() - arcStartTime) / 2000, 1);
+      let progress = Math.min((Date.now() - arcStartTime) / drawArcDuration, 1);
       currentArc = arcTarget * progress;
       if (progress >= 1) {
         fire(firingAngle);
@@ -184,15 +291,20 @@ function update() {
         enemy.lastMoveTime = Date.now();
       }
 
-      ctx.fillStyle = "red";
-      ctx.fillRect(enemy.x - enemy.size / 2, enemy.y - enemy.size / 2, enemy.size, enemy.size);
+      drawCustomEnemy(enemy.x, enemy.y, enemy.size);
 
       bullets.forEach((b, bi) => {
-        if (Math.abs(b.x - enemy.x) < enemy.size / 2 && Math.abs(b.y - enemy.y) < enemy.size / 2) {
+        if (Math.abs(b.x - enemy.x) < enemy.size / 3 && Math.abs(b.y - enemy.y) < enemy.size / 3) {
           explosions.push({ x: enemy.x, y: enemy.y, frame: 0, size: enemy.size });
           bullets.splice(bi, 1);
           enemies.splice(idx, 1);
           score++;
+          if (score % 3 === 0 && score !== lastLevelUpScore) {
+          fireCooldown = Math.max(500, fireCooldown - 100);
+          drawArcDuration = Math.max(500, drawArcDuration - 100);
+          lastLevelUpScore = score;
+                                        }
+
           document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
           enemyMoveInterval = Math.max(500, enemyMoveInterval - 200);
           if (score % 3 === 0) fireCooldown = Math.max(500, fireCooldown - 100);
@@ -229,41 +341,6 @@ function update() {
   requestAnimationFrame(update);
 }
 
-function drawPointer(angle) {
-  ctx.save();
-  ctx.translate(center.x, center.y);
-  ctx.rotate(-angle * Math.PI / 180);
-  ctx.fillStyle = "darkcyan";
-  ctx.beginPath();
-  ctx.moveTo(20, 0);
-  ctx.lineTo(-10, -10);
-  ctx.lineTo(-5, 0);
-  ctx.lineTo(-10, 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawArc(from, to) {
-  ctx.save();
-  ctx.translate(center.x, center.y);
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.fillStyle = "#FFFF00";
-  ctx.arc(0, 0, 100, -from * Math.PI / 180, -to * Math.PI / 180, true);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "aqua";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(100 * Math.cos(-from * Math.PI / 180), 100 * Math.sin(-from * Math.PI / 180));
-  ctx.moveTo(0, 0);
-  ctx.lineTo(100 * Math.cos(-to * Math.PI / 180), 100 * Math.sin(-to * Math.PI / 180));
-  ctx.stroke();
-  ctx.restore();
-}
-
 const numpad = document.getElementById("numpad");
 const keys = [[1,2,3],[4,5,6],[7,8,9],["けす",0]];
 keys.forEach(row => {
@@ -283,6 +360,7 @@ keys.forEach(row => {
 });
 
 update();
+    // ※既にユーザーが提供済みのコードをベースにする
 
   </script>
 </body>
