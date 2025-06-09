@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
+<!DOCTYPE html><html lang="ja">
 <head>
   <meta charset="UTF-8">
   <title>角度インベーダー v15</title>
@@ -54,246 +53,237 @@
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    const center = { x: canvas.width / 2, y: canvas.height / 2 };
+    const center = { x: canvas.width / 2, y: canvas.height / 2 };const explosionImages = [new Image(), new Image()];
+explosionImages[0].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom1.png';
+explosionImages[1].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom2.png';
 
-    const enemyImage = new Image();
-    enemyImage.src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/teki.png';
+const timerItemImage = new Image();
+timerItemImage.src = 'https://www.sozailab.jp/db_img/sozai/12297/0d52b6f43ae170a5515cf8ca7f274da5.png';
 
-    const explosionImages = [new Image(), new Image()];
-    explosionImages[0].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom1.png';
-    explosionImages[1].src = 'https://tokodomo.xyz/wp-content/uploads/2024/07/shooting_ver1.4_bom2.png';
+const explosionFrameCount = 16;
+let bullets = [], enemies = [], explosions = [], items = [];
+let firingAngle = 0, score = 0, lastFireTime = 0;
+let gameRunning = false, gameOver = false;
+let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
+let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
+let freezeUntil = 0;
+let fireCooldown = 3000;
 
-    const timerItemImage = new Image();
-    timerItemImage.src = 'https://www.sozailab.jp/db_img/sozai/12297/0d52b6f43ae170a5515cf8ca7f274da5.png';
+function startGame() {
+  bullets = [];
+  enemies = [];
+  explosions = [];
+  items = [];
+  score = 0;
+  fireCooldown = 3000;
+  gameRunning = true;
+  gameOver = false;
+  enemyMoveInterval = 5000;
+  lastEnemySpawnTime = Date.now();
+  document.getElementById("scoreDisplay").textContent = "スコア: 0";
+  spawnEnemy();
+}
 
-    const explosionFrameCount = 16;
-    let bullets = [], enemies = [], explosions = [], items = [];
-    let firingAngle = 0, score = 0, lastFireTime = 0;
-    let gameRunning = false, gameOver = false;
-    let isPreparingFire = false, arcTarget = 0, currentArc = 0, arcStartTime = 0, keepArc = false, arcShownTime = 0, returningToZero = false;
-    let enemyMoveInterval = 5000, baseEnemySpawnInterval = 30000, lastEnemySpawnTime = 0;
-    let freezeUntil = 0;
-    let fireCooldown = 3000;
-    let baseArcTime = 2000;
-    let currentArcTime = baseArcTime;
+function prepareFire() {
+  if (!gameRunning || Date.now() - lastFireTime < fireCooldown) return;
+  const angle = parseFloat(document.getElementById("angleInput").value) % 360;
+  firingAngle = angle;
+  arcTarget = angle;
+  isPreparingFire = true;
+  keepArc = false;
+  returningToZero = false;
+  arcStartTime = Date.now();
+  lastFireTime = Date.now();
+  document.getElementById("angleInput").value = "";
+}
 
-    function startGame() {
-      bullets = [];
-      enemies = [];
-      explosions = [];
-      items = [];
-      score = 0;
-      fireCooldown = 3000;
-      currentArcTime = baseArcTime;
-      gameRunning = true;
-      gameOver = false;
-      enemyMoveInterval = 5000;
-      lastEnemySpawnTime = Date.now();
-      document.getElementById("scoreDisplay").textContent = "スコア: 0";
-      spawnEnemy();
+function fire(angle) {
+  const rad = -angle * Math.PI / 180;
+  bullets.push({
+    x: center.x,
+    y: center.y,
+    dx: Math.cos(rad) * 5,
+    dy: Math.sin(rad) * 5
+  });
+  keepArc = true;
+  arcShownTime = Date.now();
+}
+
+function spawnEnemy() {
+  if (enemies.length >= 3) return;
+  let x, y;
+  do {
+    x = Math.random() * canvas.width;
+    y = Math.random() * canvas.height;
+  } while (Math.hypot(x - center.x, y - center.y) < 200);
+  let size = 30 * (1 + Math.random() * 2);
+  enemies.push({ x, y, size: size, lastMoveTime: Date.now() });
+  if (Math.random() < 0.1) spawnItem();
+}
+
+function spawnItem() {
+  let x = Math.random() * canvas.width;
+  let y = Math.random() * canvas.height;
+  items.push({ x, y, size: 45 });
+}
+
+function drawExplosions() {
+  explosions.forEach((explosion, index) => {
+    const frame = Math.floor(explosion.frame / 4);
+    if (frame >= explosionFrameCount) {
+      explosions.splice(index, 1);
+      return;
     }
+    const image = explosionImages[Math.floor(Math.random() * explosionImages.length)];
+    ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - explosion.size / 2, explosion.y - explosion.size / 2, explosion.size, explosion.size);
+    explosion.frame++;
+  });
+}
 
-    function prepareFire() {
-      if (!gameRunning || Date.now() - lastFireTime < fireCooldown) return;
-      const angle = parseFloat(document.getElementById("angleInput").value) % 360;
-      firingAngle = angle;
-      arcTarget = angle;
-      isPreparingFire = true;
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (gameRunning) {
+    if (isPreparingFire) {
+      let progress = Math.min((Date.now() - arcStartTime) / 2000, 1);
+      currentArc = arcTarget * progress;
+      if (progress >= 1) {
+        fire(firingAngle);
+        isPreparingFire = false;
+        returningToZero = true;
+      }
+    } else if (returningToZero && Date.now() - arcShownTime >= 2000) {
+      currentArc = 0;
       keepArc = false;
       returningToZero = false;
-      arcStartTime = Date.now();
-      lastFireTime = Date.now();
-      document.getElementById("angleInput").value = "";
     }
+    if (isPreparingFire || keepArc || returningToZero) drawArc(0, currentArc);
+    drawPointer(currentArc);
 
-    function fire(angle) {
-      const rad = -angle * Math.PI / 180;
-      bullets.push({
-        x: center.x,
-        y: center.y,
-        dx: Math.cos(rad) * 5,
-        dy: Math.sin(rad) * 5
-      });
-      keepArc = true;
-      arcShownTime = Date.now();
-    }
-
-    function spawnEnemy() {
-      if (enemies.length >= 3) return;
-      let x, y;
-      do {
-        x = Math.random() * canvas.width;
-        y = Math.random() * canvas.height;
-      } while (Math.hypot(x - center.x, y - center.y) < 200);
-      let size = 30 * (1 + Math.random() * 2);
-      enemies.push({ x, y, size: size, lastMoveTime: Date.now() });
-      if (Math.random() < 0.1) spawnItem();
-    }
-
-    function spawnItem() {
-      let x = Math.random() * canvas.width;
-      let y = Math.random() * canvas.height;
-      items.push({ x, y, size: 45 });
-    }
-
-    function drawExplosions() {
-      explosions.forEach((explosion, index) => {
-        const frame = Math.floor(explosion.frame / 4);
-        if (frame >= explosionFrameCount) {
-          explosions.splice(index, 1);
-          return;
-        }
-        const image = explosionImages[Math.floor(Math.random() * explosionImages.length)];
-        ctx.drawImage(image, 0, 0, image.width, image.height, explosion.x - explosion.size / 2, explosion.y - explosion.size / 2, explosion.size, explosion.size);
-        explosion.frame++;
-      });
-    }
-
-    function update() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (gameRunning) {
-        if (isPreparingFire) {
-          let progress = Math.min((Date.now() - arcStartTime) / currentArcTime, 1);
-          currentArc = arcTarget * progress;
-          if (progress >= 1) {
-            fire(firingAngle);
-            isPreparingFire = false;
-            returningToZero = true;
-          }
-        } else if (returningToZero && Date.now() - arcShownTime >= 2000) {
-          currentArc = 0;
-          keepArc = false;
-          returningToZero = false;
-        }
-        if (isPreparingFire || keepArc || returningToZero) drawArc(0, currentArc);
-        drawPointer(currentArc);
-
-        bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
-        bullets.forEach(b => {
-          b.x += b.dx;
-          b.y += b.dy;
-          ctx.fillStyle = "aqua";
-          ctx.beginPath();
-          ctx.arc(b.x, b.y, 10, 0, Math.PI * 2);
-          ctx.fill();
-        });
-
-        let spawnInterval = Math.max(1000, baseEnemySpawnInterval - score * 500);
-        if (Date.now() - lastEnemySpawnTime >= spawnInterval) {
-          spawnEnemy();
-          lastEnemySpawnTime = Date.now();
-        }
-
-        enemies.forEach((enemy, idx) => {
-          if (Date.now() > freezeUntil && Date.now() - enemy.lastMoveTime >= enemyMoveInterval) {
-            const angle = Math.atan2(center.y - enemy.y, center.x - enemy.x);
-            enemy.x += Math.cos(angle) * 10;
-            enemy.y += Math.sin(angle) * 10;
-            enemy.lastMoveTime = Date.now();
-          }
-
-          ctx.drawImage(enemyImage, enemy.x - enemy.size / 2, enemy.y - enemy.size / 2, enemy.size, enemy.size);
-
-          bullets.forEach((b, bi) => {
-            if (Math.abs(b.x - enemy.x) < enemy.size / 2 && Math.abs(b.y - enemy.y) < enemy.size / 2) {
-              explosions.push({ x: enemy.x, y: enemy.y, frame: 0, size: enemy.size });
-              bullets.splice(bi, 1);
-              enemies.splice(idx, 1);
-              score++;
-              document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
-              enemyMoveInterval = Math.max(500, enemyMoveInterval - 200);
-              if (score % 3 === 0) {
-                fireCooldown = Math.max(500, fireCooldown - 100);
-                currentArcTime = Math.max(500, currentArcTime - 100);
-              }
-              spawnEnemy();
-            }
-          });
-
-          if (Math.abs(enemy.x - center.x) < 20 && Math.abs(enemy.y - center.y) < 20) {
-            gameRunning = false;
-            gameOver = true;
-          }
-        });
-
-        items.forEach((item, idx) => {
-          ctx.drawImage(timerItemImage, item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
-          bullets.forEach((b, bi) => {
-            if (Math.abs(b.x - item.x) < item.size / 2 && Math.abs(b.y - item.y) < item.size / 2) {
-              bullets.splice(bi, 1);
-              items.splice(idx, 1);
-              freezeUntil = Date.now() + 15000;
-            }
-          });
-        });
-      }
-
-      drawExplosions();
-
-      if (gameOver) {
-        ctx.fillStyle = "white";
-        ctx.font = "30px sans-serif";
-        ctx.fillText("ゲームオーバー", canvas.width / 2 - 100, canvas.height / 2);
-      }
-
-      requestAnimationFrame(update);
-    }
-
-    function drawPointer(angle) {
-      ctx.save();
-      ctx.translate(center.x, center.y);
-      ctx.rotate(-angle * Math.PI / 180);
-      ctx.fillStyle = "darkcyan";
+    bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
+    bullets.forEach(b => {
+      b.x += b.dx;
+      b.y += b.dy;
+      ctx.fillStyle = "aqua";
       ctx.beginPath();
-      ctx.moveTo(20, 0);
-      ctx.lineTo(-10, -10);
-      ctx.lineTo(-5, 0);
-      ctx.lineTo(-10, 10);
-      ctx.closePath();
+      ctx.arc(b.x, b.y, 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
-    }
-
-    function drawArc(from, to) {
-      ctx.save();
-      ctx.translate(center.x, center.y);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.fillStyle = "#FFFF00";
-      ctx.arc(0, 0, 100, -from * Math.PI / 180, -to * Math.PI / 180, true);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "aqua";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(100 * Math.cos(-from * Math.PI / 180), 100 * Math.sin(-from * Math.PI / 180));
-      ctx.moveTo(0, 0);
-      ctx.lineTo(100 * Math.cos(-to * Math.PI / 180), 100 * Math.sin(-to * Math.PI / 180));
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    const numpad = document.getElementById("numpad");
-    const keys = [[1,2,3],[4,5,6],[7,8,9],["けす",0]];
-    keys.forEach(row => {
-      const rowDiv = document.createElement("div");
-      row.forEach(k => {
-        const btn = document.createElement("button");
-        btn.textContent = k;
-        btn.className = "numpad-button";
-        btn.onclick = () => {
-          const input = document.getElementById("angleInput");
-          if (k === "けす") input.value = "";
-          else input.value += k;
-        };
-        rowDiv.appendChild(btn);
-      });
-      numpad.appendChild(rowDiv);
     });
 
-    update();
+    let spawnInterval = Math.max(1000, baseEnemySpawnInterval - score * 500);
+    if (Date.now() - lastEnemySpawnTime >= spawnInterval) {
+      spawnEnemy();
+      lastEnemySpawnTime = Date.now();
+    }
+
+    enemies.forEach((enemy, idx) => {
+      if (Date.now() > freezeUntil && Date.now() - enemy.lastMoveTime >= enemyMoveInterval) {
+        const angle = Math.atan2(center.y - enemy.y, center.x - enemy.x);
+        enemy.x += Math.cos(angle) * 10;
+        enemy.y += Math.sin(angle) * 10;
+        enemy.lastMoveTime = Date.now();
+      }
+
+      ctx.fillStyle = "red";
+      ctx.fillRect(enemy.x - enemy.size / 2, enemy.y - enemy.size / 2, enemy.size, enemy.size);
+
+      bullets.forEach((b, bi) => {
+        if (Math.abs(b.x - enemy.x) < enemy.size / 2 && Math.abs(b.y - enemy.y) < enemy.size / 2) {
+          explosions.push({ x: enemy.x, y: enemy.y, frame: 0, size: enemy.size });
+          bullets.splice(bi, 1);
+          enemies.splice(idx, 1);
+          score++;
+          document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
+          enemyMoveInterval = Math.max(500, enemyMoveInterval - 200);
+          if (score % 3 === 0) fireCooldown = Math.max(500, fireCooldown - 100);
+          spawnEnemy();
+        }
+      });
+
+      if (Math.abs(enemy.x - center.x) < 20 && Math.abs(enemy.y - center.y) < 20) {
+        gameRunning = false;
+        gameOver = true;
+      }
+    });
+
+    items.forEach((item, idx) => {
+      ctx.drawImage(timerItemImage, item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
+      bullets.forEach((b, bi) => {
+        if (Math.abs(b.x - item.x) < item.size / 2 && Math.abs(b.y - item.y) < item.size / 2) {
+          bullets.splice(bi, 1);
+          items.splice(idx, 1);
+          freezeUntil = Date.now() + 15000;
+        }
+      });
+    });
+  }
+
+  drawExplosions();
+
+  if (gameOver) {
+    ctx.fillStyle = "white";
+    ctx.font = "30px sans-serif";
+    ctx.fillText("ゲームオーバー", canvas.width / 2 - 100, canvas.height / 2);
+  }
+
+  requestAnimationFrame(update);
+}
+
+function drawPointer(angle) {
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.rotate(-angle * Math.PI / 180);
+  ctx.fillStyle = "darkcyan";
+  ctx.beginPath();
+  ctx.moveTo(20, 0);
+  ctx.lineTo(-10, -10);
+  ctx.lineTo(-5, 0);
+  ctx.lineTo(-10, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawArc(from, to) {
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.fillStyle = "#FFFF00";
+  ctx.arc(0, 0, 100, -from * Math.PI / 180, -to * Math.PI / 180, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "aqua";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(100 * Math.cos(-from * Math.PI / 180), 100 * Math.sin(-from * Math.PI / 180));
+  ctx.moveTo(0, 0);
+  ctx.lineTo(100 * Math.cos(-to * Math.PI / 180), 100 * Math.sin(-to * Math.PI / 180));
+  ctx.stroke();
+  ctx.restore();
+}
+
+const numpad = document.getElementById("numpad");
+const keys = [[1,2,3],[4,5,6],[7,8,9],["けす",0]];
+keys.forEach(row => {
+  const rowDiv = document.createElement("div");
+  row.forEach(k => {
+    const btn = document.createElement("button");
+    btn.textContent = k;
+    btn.className = "numpad-button";
+    btn.onclick = () => {
+      const input = document.getElementById("angleInput");
+      if (k === "けす") input.value = "";
+      else input.value += k;
+    };
+    rowDiv.appendChild(btn);
+  });
+  numpad.appendChild(rowDiv);
+});
+
+update();
+
   </script>
 </body>
 </html>
