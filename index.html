@@ -67,6 +67,8 @@
     let freezeUntil = 0;
     let fireCooldown = 3000;
     let drawArcDuration = 2000; // 弧の描画時間（ms）
+    let arcHoldDuration = 2000; // 弧の表示時間
+
     let lastLevelUpScore = 0;   // レベルアップ重複防止
 
 
@@ -259,7 +261,7 @@ function update() {
         isPreparingFire = false;
         returningToZero = true;
       }
-    } else if (returningToZero && Date.now() - arcShownTime >= 2000) {
+    } else if (returningToZero && Date.now() - arcShownTime >= arcHoldDuration) {
       currentArc = 0;
       keepArc = false;
       returningToZero = false;
@@ -301,6 +303,7 @@ function update() {
           score++;
           if (score % 3 === 0 && score !== lastLevelUpScore) {
           fireCooldown = Math.max(500, fireCooldown - 100);
+          arcHoldDuration = Math.max(500, arcHoldDuration - 100);
           drawArcDuration = Math.max(500, drawArcDuration - 100);
           lastLevelUpScore = score;
                                         }
